@@ -1,0 +1,24 @@
+name: pkg_num
+metrics:
+  counters:
+  - name: pkt_size
+    help: Number of sent and received packets
+    table: calls
+    labels:
+    - name: proto
+      size: 4
+      decoders:
+      - name: uint
+    - name: errorno
+      size: 4
+      decoders:
+      - name: uint
+    - name: recv
+      size: 4
+      decoders:
+      - name: uint
+kprobes:
+  l2cap_sock_sendmsg: l2cap_sendmsg
+  l2cap_sock_recvmsg: l2cap_recvmsg
+  sco_sock_sendmsg: sco_sendmsg
+  sco_sock_recvmsg: sco_recvmsg
