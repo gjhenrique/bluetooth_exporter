@@ -1,15 +1,11 @@
-name: pkt_calls
+name: pkt_size
 metrics:
   counters:
-  - name: pkt_call
-    help: Number of sent and received packets
-    table: calls
+  - name: pkt_size
+    help: Size of sent and received packets
+    table: size
     labels:
     - name: proto
-      size: 4
-      decoders:
-      - name: uint
-    - name: errorno
       size: 4
       decoders:
       - name: uint
@@ -17,7 +13,7 @@ metrics:
       size: 4
       decoders:
       - name: uint
-kretprobes:
+kprobes:
   l2cap_sock_sendmsg: l2cap_sendmsg
   l2cap_sock_recvmsg: l2cap_recvmsg
   sco_sock_sendmsg: sco_sendmsg

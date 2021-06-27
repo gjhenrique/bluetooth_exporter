@@ -22,6 +22,7 @@ static inline void track_calls(struct pt_regs *ctx, int proto, bool recv) {
   key.recv = recv;
 
   if (retval < 0) {
+    // ebpf_exporter decoder only supports uints
     key.errorno = retval * -1;
   } else {
     key.errorno = 0;
@@ -37,8 +38,6 @@ int l2cap_recvmsg(struct pt_regs *ctx) {
 }
 
 int l2cap_sendmsg(struct pt_regs *ctx) {
-  int retval = regs_return_value(ctx);
-  bpf_trace_printk("Event %d", retval);
   track_calls(ctx, BTPROTO_L2CAP, false);
   return 0;
 }
