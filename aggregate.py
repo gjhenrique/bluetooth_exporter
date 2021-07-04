@@ -1,12 +1,14 @@
 from python.pkt_calls import TEXT as pkt_calls_program
 from python.pkt_size import TEXT as pkt_size_program
+from python.bufsize import TEXT as bufsize_program
 from ruamel.yaml import YAML
 
 yaml = YAML()
 
 files = {
     pkt_calls_program: 'exporter/pkt_calls.yaml',
-    pkt_size_program: 'exporter/pkt_size.yaml'
+    pkt_size_program: 'exporter/pkt_size.yaml',
+    bufsize_program: 'exporter/bufsize.yaml'
 }
 
 arr = []

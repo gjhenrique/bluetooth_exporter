@@ -1,0 +1,23 @@
+name: bufsize
+metrics:
+  histograms:
+  - name: bufsize
+    help: Size of sk_wmem_alloc of the SCO and L2CAP socket
+    table: sndbuf
+    bucket_type: linear
+    bucket_min: 0
+    bucket_max: 80
+    bucket_multiplier: 100
+    labels:
+    - name: proto
+      size: 4
+      decoders:
+      - name: uint
+    - name: bucket
+      size: 4
+      decoders:
+      - name: uint
+kprobes:
+  l2cap_sock_sendmsg: l2cap_sendmsg
+  sco_sock_sendmsg: sco_sendmsg
+code: |
