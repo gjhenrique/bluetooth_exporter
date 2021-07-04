@@ -16,9 +16,5 @@ for k, v in files.items():
         my_dict['code'] = k
         arr.append(my_dict)
 
-a = {
-    'programs': arr
-}
-
 with open('config.yaml', 'w') as f:
-    yaml.dump(a, f)
+    yaml.dump({ 'programs': arr }, f)

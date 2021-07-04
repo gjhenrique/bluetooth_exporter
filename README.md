@@ -18,15 +18,15 @@ docker-compose -f docker/docker.yaml
 Includes the following metrics:
 - Syscall errors. Whenever a syscall 
 
-- Size of socket sendbuf. Total and the current value
-
 - Size of packets received/sent
 
 - Number of packets written
 
+- Size of socket sendbuf. Total and the current value
+
 - Size of acl_count, sco_count and le_count
 
-- Time it takes to enqueue an urb 
+- Time it takes to enqueue an urb (Histogram)
 
 - Time it takes to acknowledge a packet. SCO packets are not included (Using queue from ebpf)
 
