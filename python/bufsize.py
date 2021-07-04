@@ -9,7 +9,7 @@ struct key_t {
   unsigned int bucket;
 };
 
-BPF_HISTOGRAM(sndbuf, struct key_t, 100000);
+BPF_HISTOGRAM(sndbuf, struct key_t);
 
 static inline void track_calls(struct pt_regs *ctx, int proto, struct socket *sock) {
   struct sock *sk = sock->sk;
