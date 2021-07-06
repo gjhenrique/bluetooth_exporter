@@ -28,7 +28,7 @@ Includes the following metrics:
 
 - Time it takes to enqueue an urb (Histogram)
 
-- Time it takes to acknowledge a packet. SCO packets are not included (Using queue from ebpf)
+- Time it takes to acknowledge a packet. SCO packets are not included (Using queue from ebpf?)
 
 ## Architecture
 First, ebpf programs are first developed in python and the metrics are printed every second.

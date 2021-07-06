@@ -1,0 +1,32 @@
+name: urb_time
+metrics:
+  histograms:
+  - name: urb_time
+    help: Time it takes for an URB to be completed
+    table: delta_hist
+    bucket_type: exp2
+    bucket_min: 0
+    bucket_max: 16
+    bucket_multiplier: 1
+    labels:
+    - name: event_type
+      size: 4
+      decoders:
+      - name: uint
+      - name: static_map
+        static_map:
+          100: acl
+          200: sco
+          300: acl ack
+    - name: bucket
+      size: 4
+      decoders:
+      - name: uint
+kprobes:
+  btusb_send_frame: send_frame
+  btusb_send_frame_intel: send_frame
+kretprobes:
+  btusb_tx_complete: receive_acl
+  btusb_isoc_complete: receive_sco
+  btusb_intr_complete: intr_complete
+code: |

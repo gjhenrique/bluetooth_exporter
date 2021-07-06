@@ -31,7 +31,6 @@ int work_event(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
   u8 event = hdr->evt;
 
   if (event == HCI_EV_NUM_COMP_PKTS) {
-    bpf_trace_printk("New Event acl_cnt %d", hdev->acl_cnt);
     increment_count(CNT_ACL, hdev->acl_cnt);
     increment_count(CNT_SCO, hdev->sco_cnt);
     increment_count(CNT_LE, hdev->le_cnt);
