@@ -13,6 +13,10 @@ metrics:
       size: 4
       decoders:
       - name: uint
+      - name: static_map
+        static_map:
+          0: L2CAP
+          2: SCO
     - name: bucket
       size: 4
       decoders:

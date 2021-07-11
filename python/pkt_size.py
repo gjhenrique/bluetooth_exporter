@@ -11,7 +11,7 @@ struct key_t {
 
 BPF_HASH(size, struct key_t);
 
-static inline void track_size(struct pt_regs *ctx, int proto, bool recv, size_t len) {
+static void track_size(struct pt_regs *ctx, int proto, bool recv, size_t len) {
   int retval = regs_return_value(ctx);
 
   struct key_t key = {};

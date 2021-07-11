@@ -9,10 +9,18 @@ metrics:
       size: 4
       decoders:
       - name: uint
+      - name: static_map
+        static_map:
+          0: L2CAP
+          2: SCO
     - name: recv
       size: 4
       decoders:
       - name: uint
+      - name: static_map
+        static_map:
+          0: tx
+          1: rx
 kprobes:
   l2cap_sock_sendmsg: l2cap_sendmsg
   l2cap_sock_recvmsg: l2cap_recvmsg

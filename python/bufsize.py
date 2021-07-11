@@ -11,7 +11,7 @@ struct key_t {
 
 BPF_HISTOGRAM(sndbuf, struct key_t);
 
-static inline void track_calls(struct pt_regs *ctx, int proto, struct socket *sock) {
+static void track_calls(struct pt_regs *ctx, int proto, struct socket *sock) {
   struct sock *sk = sock->sk;
   struct refcount_struct wmem;
   bpf_probe_read_kernel(&wmem, sizeof(wmem), &sk->sk_wmem_alloc);

@@ -15,9 +15,9 @@ metrics:
       - name: uint
       - name: static_map
         static_map:
-          100: acl
-          200: sco
-          300: acl ack
+          100: ACL
+          200: SCO
+          300: ACL ACK
     - name: bucket
       size: 4
       decoders:

@@ -12,7 +12,7 @@ struct key_t {
 
 BPF_HASH(calls, struct key_t);
 
-static inline void track_calls(struct pt_regs *ctx, int proto, bool recv) {
+static void track_calls(struct pt_regs *ctx, int proto, bool recv) {
   int retval = regs_return_value(ctx);
 
   struct key_t key = {};
