@@ -18,7 +18,8 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     network_mode: host
-    restart: always
+    # Uncomment to restart on boot
+    # restart: always
 
   grafana:
     image: grafana/grafana
@@ -31,4 +32,4 @@ services:
       - ./grafana/provisioning/:/etc/grafana/provisioning/
     env_file:
       - ./grafana/config.monitoring
-    restart: always
+    # restart: always
