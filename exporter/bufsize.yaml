@@ -6,8 +6,8 @@ metrics:
     table: sndbuf
     bucket_type: linear
     bucket_min: 0
-    bucket_max: 80
-    bucket_multiplier: 100
+    bucket_max: 10
+    bucket_multiplier: 1000
     labels:
     - name: proto
       size: 4

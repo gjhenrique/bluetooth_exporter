@@ -7,8 +7,8 @@ metrics:
     bucket_type: linear
     # From 0 to 200 ms
     bucket_min: 0
-    bucket_max: 10
-    bucket_multiplier: 5
+    bucket_max: 20
+    bucket_multiplier: 10
     labels:
     - name: event_type
       size: 4
@@ -26,7 +26,7 @@ metrics:
 kprobes:
   # Order is important here
   btusb_tx_complete: receive_acl
-  btusb_isoc_complete: receive_sco
+  btusb_isoc_tx_complete: receive_sco
   btusb_intr_complete: intr_complete
   btusb_send_frame: send_frame
   btusb_send_frame_intel: send_frame
