@@ -1,0 +1,388 @@
+programs:
+- name: pkt_calls
+  metrics:
+    counters:
+    - name: pkt_call
+      help: Number of sent and received packets
+      table: calls
+      labels:
+      - name: proto
+        size: 4
+        decoders:
+        - name: uint
+        - name: static_map
+          static_map:
+            0: L2CAP
+            2: SCO
+      - name: errorno
+        size: 4
+        decoders:
+        - name: uint
+      - name: recv
+        size: 4
+        decoders:
+        - name: uint
+        - name: static_map
+          static_map:
+            0: tx
+            1: rx
+  kretprobes:
+    l2cap_sock_sendmsg: l2cap_sendmsg
+    l2cap_sock_recvmsg: l2cap_recvmsg
+    sco_sock_sendmsg: sco_sendmsg
+    sco_sock_recvmsg: sco_recvmsg
+  code: |
+    #include <net/bluetooth/bluetooth.h>
+
+    struct key_t {
+      unsigned int proto;
+      unsigned int errorno;
+      bool recv;
+    };
+
+    BPF_HASH(calls, struct key_t);
+
+    static void track_calls(struct pt_regs *ctx, int proto, bool recv) {
+      int retval = regs_return_value(ctx);
+
+      struct key_t key = {};
+
+      key.proto = proto;
+      key.recv = recv;
+
+      if (retval < 0) {
+        // ebpf_exporter decoder only supports uints
+        key.errorno = retval * -1;
+      } else {
+        key.errorno = 0;
+      }
+
+
+      calls.increment(key);
+    }
+
+    int l2cap_recvmsg(struct pt_regs *ctx) {
+      track_calls(ctx, BTPROTO_L2CAP, true);
+      return 0;
+    }
+
+    int l2cap_sendmsg(struct pt_regs *ctx) {
+      track_calls(ctx, BTPROTO_L2CAP, false);
+      return 0;
+    }
+
+    int sco_recvmsg(struct pt_regs *ctx) {
+      track_calls(ctx, BTPROTO_SCO, true);
+      return 0;
+    }
+
+    int sco_sendmsg(struct pt_regs *ctx) {
+      track_calls(ctx, BTPROTO_SCO, false);
+      return 0;
+    }
+- name: pkt_size
+  metrics:
+    counters:
+    - name: pkt_size
+      help: Size of sent and received packets
+      table: size
+      labels:
+      - name: proto
+        size: 4
+        decoders:
+        - name: uint
+        - name: static_map
+          static_map:
+            0: L2CAP
+            2: SCO
+      - name: recv
+        size: 4
+        decoders:
+        - name: uint
+        - name: static_map
+          static_map:
+            0: tx
+            1: rx
+  kprobes:
+    l2cap_sock_sendmsg: l2cap_sendmsg
+    l2cap_sock_recvmsg: l2cap_recvmsg
+    sco_sock_sendmsg: sco_sendmsg
+    sco_sock_recvmsg: sco_recvmsg
+  code: |
+    #include <net/bluetooth/bluetooth.h>
+
+    struct key_t {
+      unsigned int proto;
+      bool recv;
+    };
+
+    BPF_HASH(size, struct key_t);
+
+    static void track_size(struct pt_regs *ctx, int proto, bool recv, size_t len) {
+      int retval = regs_return_value(ctx);
+
+      struct key_t key = {};
+
+      key.proto = proto;
+      key.recv = recv;
+
+      size.increment(key, len);
+    }
+
+    int l2cap_recvmsg(struct pt_regs *ctx, struct socket *sock,
+                      struct msghdr *msg, size_t len) {
+      track_size(ctx, BTPROTO_L2CAP, true, len);
+      return 0;
+    }
+
+    int l2cap_sendmsg(struct pt_regs *ctx, struct socket *sock,
+                      struct msghdr *msg, size_t len) {
+      track_size(ctx, BTPROTO_L2CAP, false, len);
+      return 0;
+    }
+
+    int sco_recvmsg(struct pt_regs *ctx, struct socket *sock,
+                      struct msghdr *msg, size_t len) {
+      track_size(ctx, BTPROTO_SCO, true, len);
+      return 0;
+    }
+
+    int sco_sendmsg(struct pt_regs *ctx, struct socket *sock,
+                      struct msghdr *msg, size_t len) {
+      track_size(ctx, BTPROTO_SCO, false, len);
+      return 0;
+    }
+- name: bufsize
+  metrics:
+    histograms:
+    - name: bufsize
+      help: Size of sk_wmem_alloc of the SCO and L2CAP socket
+      table: sndbuf
+      bucket_type: linear
+      bucket_min: 0
+      bucket_max: 10
+      bucket_multiplier: 1000
+      labels:
+      - name: proto
+        size: 4
+        decoders:
+        - name: uint
+        - name: static_map
+          static_map:
+            0: L2CAP
+            2: SCO
+      - name: bucket
+        size: 4
+        decoders:
+        - name: uint
+  kprobes:
+    l2cap_sock_sendmsg: l2cap_sendmsg
+    sco_sock_sendmsg: sco_sendmsg
+  code: |
+    #include <net/bluetooth/bluetooth.h>
+
+    struct key_t {
+      unsigned int proto;
+      unsigned int bucket;
+    };
+
+    BPF_HISTOGRAM(sndbuf, struct key_t);
+
+    static void track_calls(struct pt_regs *ctx, int proto, struct socket *sock) {
+      struct sock *sk = sock->sk;
+      struct refcount_struct wmem;
+      bpf_probe_read_kernel(&wmem, sizeof(wmem), &sk->sk_wmem_alloc);
+
+      // sk->sk_sndbuf is the limit set by SO_SNDBUF socket option
+      struct key_t key;
+      key.proto = proto;
+      key.bucket = (refcount_read(&wmem) - 1) / 100;
+
+      sndbuf.increment(key);
+    }
+
+    int l2cap_sendmsg(struct pt_regs *ctx, struct socket *sock) {
+      track_calls(ctx, BTPROTO_L2CAP, sock);
+      return 0;
+    }
+
+    int sco_sendmsg(struct pt_regs *ctx, struct socket *sock) {
+      track_calls(ctx, BTPROTO_SCO, sock);
+      return 0;
+    }
+- name: hdev_count
+  metrics:
+    counters:
+    - name: hdev_count
+      help: Numer of acl_cnt, sco_cnt and le_cnt
+      table: cnt
+      labels:
+      - name: type
+        size: 4
+        decoders:
+        - name: uint
+        - name: static_map
+          static_map:
+            100: ACL
+            200: SCO
+            300: LE
+      - name: count
+        size: 4
+        decoders:
+        - name: uint
+  kprobes:
+    hci_event_packet: work_event
+  code: |
+    #include <net/bluetooth/bluetooth.h>
+    #include <net/bluetooth/hci.h>
+    #include <net/bluetooth/hci_core.h>
+
+    struct key_t {
+      unsigned int type;
+      unsigned int count;
+    };
+
+    #define CNT_ACL 100
+    #define CNT_SCO 200
+    #define CNT_LE 300
+
+    // Put this as 1 to enable reporting le_cnt value
+    # define ENABLE_LE_CNT 0
+
+    BPF_HASH(cnt, struct key_t);
+
+    static void increment_count(int type, int count) {
+      struct key_t key;
+      key.type = type;
+      key.count = count;
+      cnt.increment(key);
+    }
+
+    int work_event(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
+      struct hci_event_hdr *hdr = (void *) skb->data;
+      u8 event = hdr->evt;
+
+      if (event == HCI_EV_NUM_COMP_PKTS) {
+        increment_count(CNT_ACL, hdev->acl_cnt);
+        increment_count(CNT_SCO, hdev->sco_cnt);
+        if (ENABLE_LE_CNT) {
+          increment_count(CNT_LE, hdev->le_cnt);
+        }
+      }
+
+      return 0;
+    }
+- name: urb_time
+  metrics:
+    histograms:
+    - name: urb_time
+      help: Time it takes for an URB to be completed
+      table: delta_hist
+      bucket_type: linear
+    # From 0 to 200 ms
+      bucket_min: 0
+      bucket_max: 20
+      bucket_multiplier: 10
+      labels:
+      - name: event_type
+        size: 4
+        decoders:
+        - name: uint
+        - name: static_map
+          static_map:
+            100: ACL
+            200: SCO
+            300: ACL ACK
+      - name: bucket
+        size: 4
+        decoders:
+        - name: uint
+  kprobes:
+  # Order is important here
+    btusb_tx_complete: receive_acl
+    btusb_isoc_tx_complete: receive_sco
+    btusb_intr_complete: intr_complete
+    btusb_send_frame: send_frame
+    btusb_send_frame_intel: send_frame
+  code: |
+    #include <net/bluetooth/bluetooth.h>
+    #include <net/bluetooth/hci.h>
+
+    BPF_QUEUE(dist_acl, u64, 5);
+    BPF_QUEUE(dist_acl_ack, u64, 5);
+    BPF_QUEUE(dist_sco, u64, 5);
+
+    #define ACL_SND 100
+    #define SCO_SND 200
+    #define ACL_ACK 300
+
+    struct val_t {
+      uint event_type;
+      uint bucket;
+    };
+
+    BPF_HISTOGRAM(delta_hist, struct val_t, 4096);
+
+    int send_frame(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
+      struct bt_skb_cb *cb = (struct bt_skb_cb *)((skb)->cb);
+      u64 ts = bpf_ktime_get_ns();
+
+      if(cb->pkt_type == HCI_ACLDATA_PKT) {
+      bpf_trace_printk("Inserting %d", ts %1000000);
+        dist_acl.push(&ts, 0);
+      } else if(cb->pkt_type == HCI_SCODATA_PKT) {
+        dist_sco.push(&ts, 0);
+      }
+
+      return 0;
+    }
+
+    static void store(uint event_type, u64 ts) {
+      uint delta_micro_sec = (bpf_ktime_get_ns() - ts) / 1000000;
+      u64 now = bpf_ktime_get_ns();
+      uint delta = delta_micro_sec;
+
+
+      if (delta >= 0 && delta < 1024) {
+        bpf_trace_printk("Receiving %d %d %d", ts %1000000, delta, event_type);
+        struct val_t val;
+        val.event_type = event_type;
+        val.bucket = delta;
+
+        delta_hist.increment(val);
+      }
+    }
+
+    int receive_acl(struct pt_regs *ctx) {
+      u64 ts;
+      dist_acl.pop(&ts);
+      // Avoid inserting empty value in the queue
+      if (ts == 0) {
+        return 0;
+      }
+      dist_acl_ack.push(&ts, 0);
+      store(ACL_SND, ts);
+
+      return 0;
+    }
+
+    int receive_sco(struct pt_regs *ctx) {
+      u64 ts;
+      dist_sco.pop(&ts);
+      if(ts > 0) {
+        store(SCO_SND, ts);
+      }
+
+      return 0;
+    }
+
+    int intr_complete(struct pt_regs *ctx) {
+      u64 ts;
+      dist_acl_ack.pop(&ts);
+
+      if(ts > 0) {
+        store(ACL_ACK, ts);
+      }
+
+      return 0;
+    }
