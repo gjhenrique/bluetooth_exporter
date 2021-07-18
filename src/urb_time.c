@@ -11,7 +11,7 @@ BPF_QUEUE(dist_sco, u64, 5);
 
 struct val_t {
   uint event_type;
-  uint bucket;
+  uint slot;
 };
 
 BPF_HISTOGRAM(delta_hist, struct val_t, 4096);
@@ -21,7 +21,7 @@ int send_frame(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
   u64 ts = bpf_ktime_get_ns();
 
   if(cb->pkt_type == HCI_ACLDATA_PKT) {
-  bpf_trace_printk("Inserting %d", ts %1000000);
+    bpf_trace_printk("Inserting %d", ts %1000000);
     dist_acl.push(&ts, 0);
   } else if(cb->pkt_type == HCI_SCODATA_PKT) {
     dist_sco.push(&ts, 0);
@@ -31,16 +31,14 @@ int send_frame(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
 }
 
 static void store(uint event_type, u64 ts) {
-  uint delta_micro_sec = (bpf_ktime_get_ns() - ts) / 1000000;
+  uint delta = (bpf_ktime_get_ns() - ts) / 1000000;
   u64 now = bpf_ktime_get_ns();
-  uint delta = delta_micro_sec;
-
 
   if (delta >= 0 && delta < 1024) {
     bpf_trace_printk("Receiving %d %d %d", ts %1000000, delta, event_type);
     struct val_t val;
     val.event_type = event_type;
-    val.bucket = delta;
+    val.slot = delta / 10 * 10;
 
     delta_hist.increment(val);
   }
@@ -69,12 +67,16 @@ int receive_sco(struct pt_regs *ctx) {
   return 0;
 }
 
-int intr_complete(struct pt_regs *ctx) {
-  u64 ts;
-  dist_acl_ack.pop(&ts);
+int receive_hci_event(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
+  struct hci_event_hdr *hdr = (void *) skb->data;
 
-  if(ts > 0) {
-    store(ACL_ACK, ts);
+  if (hdr->evt == HCI_EV_NUM_COMP_PKTS) {
+    u64 ts;
+    dist_acl_ack.pop(&ts);
+
+    if(ts > 0) {
+      store(ACL_ACK, ts);
+    }
   }
 
   return 0;

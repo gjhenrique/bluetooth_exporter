@@ -278,11 +278,19 @@ programs:
     - name: urb_time
       help: Time it takes for an URB to be completed
       table: delta_hist
-      bucket_type: linear
-    # From 0 to 200 ms
-      bucket_min: 0
-      bucket_max: 20
-      bucket_multiplier: 10
+      bucket_type: fixed
+      bucket_keys:
+      - 0
+      - 10
+      - 20
+      - 30
+      - 40
+      - 50
+      - 60
+      - 70
+      - 80
+      - 90
+      - 100
       labels:
       - name: event_type
         size: 4
@@ -301,7 +309,7 @@ programs:
   # Order is important here
     btusb_tx_complete: receive_acl
     btusb_isoc_tx_complete: receive_sco
-    btusb_intr_complete: intr_complete
+    hci_event_packet: receive_hci_event
     btusb_send_frame: send_frame
     btusb_send_frame_intel: send_frame
   code: |
@@ -318,7 +326,7 @@ programs:
 
     struct val_t {
       uint event_type;
-      uint bucket;
+      uint slot;
     };
 
     BPF_HISTOGRAM(delta_hist, struct val_t, 4096);
@@ -328,7 +336,7 @@ programs:
       u64 ts = bpf_ktime_get_ns();
 
       if(cb->pkt_type == HCI_ACLDATA_PKT) {
-      bpf_trace_printk("Inserting %d", ts %1000000);
+        bpf_trace_printk("Inserting %d", ts %1000000);
         dist_acl.push(&ts, 0);
       } else if(cb->pkt_type == HCI_SCODATA_PKT) {
         dist_sco.push(&ts, 0);
@@ -338,16 +346,14 @@ programs:
     }
 
     static void store(uint event_type, u64 ts) {
-      uint delta_micro_sec = (bpf_ktime_get_ns() - ts) / 1000000;
+      uint delta = (bpf_ktime_get_ns() - ts) / 1000000;
       u64 now = bpf_ktime_get_ns();
-      uint delta = delta_micro_sec;
-
 
       if (delta >= 0 && delta < 1024) {
         bpf_trace_printk("Receiving %d %d %d", ts %1000000, delta, event_type);
         struct val_t val;
         val.event_type = event_type;
-        val.bucket = delta;
+        val.slot = delta / 10 * 10;
 
         delta_hist.increment(val);
       }
@@ -376,12 +382,16 @@ programs:
       return 0;
     }
 
-    int intr_complete(struct pt_regs *ctx) {
-      u64 ts;
-      dist_acl_ack.pop(&ts);
+    int receive_hci_event(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
+      struct hci_event_hdr *hdr = (void *) skb->data;
 
-      if(ts > 0) {
-        store(ACL_ACK, ts);
+      if (hdr->evt == HCI_EV_NUM_COMP_PKTS) {
+        u64 ts;
+        dist_acl_ack.pop(&ts);
+
+        if(ts > 0) {
+          store(ACL_ACK, ts);
+        }
       }
 
       return 0;
