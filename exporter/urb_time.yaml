@@ -7,16 +7,18 @@ metrics:
     bucket_type: fixed
     bucket_keys:
       - 0
-      - 10
-      - 20
-      - 30
-      - 40
-      - 50
-      - 60
-      - 70
-      - 80
-      - 90
-      - 100
+      - 300
+      - 1000
+      - 10000
+      - 20000
+      - 30000
+      - 40000
+      - 50000
+      - 60000
+      - 70000
+      - 80000
+      - 90000
+      - 100000
     labels:
     - name: event_type
       size: 4
@@ -36,6 +38,7 @@ kprobes:
   btusb_tx_complete: receive_acl
   btusb_isoc_tx_complete: receive_sco
   hci_event_packet: receive_hci_event
+
   btusb_send_frame: send_frame
   btusb_send_frame_intel: send_frame
 code: |

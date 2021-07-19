@@ -20,10 +20,11 @@ int send_frame(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
   struct bt_skb_cb *cb = (struct bt_skb_cb *)((skb)->cb);
   u64 ts = bpf_ktime_get_ns();
 
-  if(cb->pkt_type == HCI_ACLDATA_PKT) {
-    bpf_trace_printk("Inserting %d", ts %1000000);
+  if (cb->pkt_type == HCI_ACLDATA_PKT) {
+    bpf_trace_printk("Putting 100 %d", ts % 1000000);
     dist_acl.push(&ts, 0);
   } else if(cb->pkt_type == HCI_SCODATA_PKT) {
+    bpf_trace_printk("Putting 200 %d", ts % 1000000);
     dist_sco.push(&ts, 0);
   }
 
@@ -31,14 +32,23 @@ int send_frame(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
 }
 
 static void store(uint event_type, u64 ts) {
-  uint delta = (bpf_ktime_get_ns() - ts) / 1000000;
+  uint delta = (bpf_ktime_get_ns() - ts) / 1000;
   u64 now = bpf_ktime_get_ns();
 
-  if (delta >= 0 && delta < 1024) {
-    bpf_trace_printk("Receiving %d %d %d", ts %1000000, delta, event_type);
+  if (delta >= 0 && delta < 1024000) {
     struct val_t val;
     val.event_type = event_type;
-    val.slot = delta / 10 * 10;
+
+    if(delta < 300) {
+      val.slot = 0;
+    } else if (delta < 1000) {
+      val.slot = 300;
+    }  else if (delta < 10000){
+      val.slot = 1000;
+    } else {
+      val.slot = delta / 10000 * 10000;
+    }
+    bpf_trace_printk("Inserting delta %d %d %d", delta, event_type, ts % 1000000);
 
     delta_hist.increment(val);
   }
@@ -48,11 +58,10 @@ int receive_acl(struct pt_regs *ctx) {
   u64 ts;
   dist_acl.pop(&ts);
   // Avoid inserting empty value in the queue
-  if (ts == 0) {
-    return 0;
+  if (ts > 0) {
+    dist_acl_ack.push(&ts, 0);
+    store(ACL_SND, ts);
   }
-  dist_acl_ack.push(&ts, 0);
-  store(ACL_SND, ts);
 
   return 0;
 }
@@ -60,7 +69,7 @@ int receive_acl(struct pt_regs *ctx) {
 int receive_sco(struct pt_regs *ctx) {
   u64 ts;
   dist_sco.pop(&ts);
-  if(ts > 0) {
+  if (ts > 0) {
     store(SCO_SND, ts);
   }
 
@@ -73,6 +82,10 @@ int receive_hci_event(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff 
   if (hdr->evt == HCI_EV_NUM_COMP_PKTS) {
     u64 ts;
     dist_acl_ack.pop(&ts);
+    char *data = (void *) skb->data;
+    if(data[5] > 1) {
+      bpf_trace_printk("Event packet %d", data[5]);
+    }
 
     if(ts > 0) {
       store(ACL_ACK, ts);
