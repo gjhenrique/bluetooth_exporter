@@ -34,11 +34,9 @@ metrics:
       decoders:
         - name: uint
 kprobes:
-  # Order is important here
+  btusb_send_frame: send_frame
+  btusb_send_frame_intel: send_frame
   btusb_tx_complete: receive_acl
   btusb_isoc_tx_complete: receive_sco
   hci_event_packet: receive_hci_event
-
-  btusb_send_frame: send_frame
-  btusb_send_frame_intel: send_frame
 code: |

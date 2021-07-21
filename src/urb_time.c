@@ -16,9 +16,19 @@ struct val_t {
 
 BPF_HISTOGRAM(delta_hist, struct val_t, 4096);
 
+// btusb_send_frame can only enqueue when the receive kprobes are already attached
+BPF_HASH(kprobe_enabled);
+
 int send_frame(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff *skb) {
   struct bt_skb_cb *cb = (struct bt_skb_cb *)((skb)->cb);
   u64 ts = bpf_ktime_get_ns();
+
+  u64 key = 0;
+  u64 *enabled = kprobe_enabled.lookup(&key);
+  if(enabled == NULL) {
+    bpf_trace_printk("Skipping send frame and waiting for send kprobe");
+    return 0;
+  }
 
   if (cb->pkt_type == HCI_ACLDATA_PKT) {
     bpf_trace_printk("Putting 100 %d", ts % 1000000);
@@ -52,6 +62,12 @@ static void store(uint event_type, u64 ts) {
 
     delta_hist.increment(val);
   }
+}
+
+static void update_kprobe_enabled() {
+  u64 key = 0;
+  u64 value = 1;
+  kprobe_enabled.update(&key, &value);
 }
 
 int receive_acl(struct pt_regs *ctx) {
@@ -93,5 +109,6 @@ int receive_hci_event(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff 
     }
   }
 
+  update_kprobe_enabled();
   return 0;
 }
