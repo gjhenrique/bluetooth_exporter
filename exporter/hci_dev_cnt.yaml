@@ -1,7 +1,7 @@
-name: hdev_count
+name: hci_dev_cnt
 metrics:
   counters:
-    - name: hdev_count
+    - name: hci_dev_cnt
       help: Numer of acl_cnt, sco_cnt and le_cnt
       table: cnt
       labels:

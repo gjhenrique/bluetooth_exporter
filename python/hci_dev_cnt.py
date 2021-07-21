@@ -4,7 +4,7 @@ import time
 from bcc import BPF
 
 def main():
-    bpf = BPF(src_file="../src/hdev_cnt.c")
+    bpf = BPF(src_file="../src/hci_dev_cnt.c")
     bpf.attach_kprobe(event="hci_event_packet", fn_name="work_event")
 
     cnt = bpf.get_table("cnt")

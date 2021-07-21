@@ -7,8 +7,8 @@ yaml = YAML()
 files = {
     'pkt_calls': 'exporter/pkt_calls.yaml',
     'pkt_size': 'exporter/pkt_size.yaml',
-    'bufsize': 'exporter/bufsize.yaml',
-    'hdev_cnt': 'exporter/hdev_count.yaml',
+    'sock_alloc': 'exporter/sock_alloc.yaml',
+    'hci_dev_cnt': 'exporter/hci_dev_cnt.yaml',
     'urb_time': 'exporter/urb_time.yaml',
 }
 

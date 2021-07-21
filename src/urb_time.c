@@ -83,8 +83,9 @@ int receive_hci_event(struct pt_regs *ctx, struct hci_dev *hdev, struct sk_buff 
     u64 ts;
     dist_acl_ack.pop(&ts);
     char *data = (void *) skb->data;
-    if(data[5] > 1) {
-      bpf_trace_printk("Event packet %d", data[5]);
+    // bthci_evt.num_compl_packets first byte
+    if (data[5] > 1) {
+      bpf_trace_printk("Event packet number %d", data[5]);
     }
 
     if(ts > 0) {

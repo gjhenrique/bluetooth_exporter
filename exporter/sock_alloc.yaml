@@ -1,7 +1,7 @@
-name: bufsize
+name: sock_alloc
 metrics:
   histograms:
-  - name: bufsize
+  - name: sock_alloc
     help: Size of sk_wmem_alloc of the SCO and L2CAP socket
     table: sndbuf
     bucket_type: linear

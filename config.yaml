@@ -152,10 +152,10 @@ programs:
       track_size(ctx, BTPROTO_SCO, false, len);
       return 0;
     }
-- name: bufsize
+- name: sock_alloc
   metrics:
     histograms:
-    - name: bufsize
+    - name: sock_alloc
       help: Size of sk_wmem_alloc of the SCO and L2CAP socket
       table: sndbuf
       bucket_type: linear
@@ -210,10 +210,10 @@ programs:
       track_calls(ctx, BTPROTO_SCO, sock);
       return 0;
     }
-- name: hdev_count
+- name: hci_dev_cnt
   metrics:
     counters:
-    - name: hdev_count
+    - name: hci_dev_cnt
       help: Numer of acl_cnt, sco_cnt and le_cnt
       table: cnt
       labels:
@@ -401,8 +401,9 @@ programs:
         u64 ts;
         dist_acl_ack.pop(&ts);
         char *data = (void *) skb->data;
-        if(data[5] > 1) {
-          bpf_trace_printk("Event packet %d", data[5]);
+        // bthci_evt.num_compl_packets first byte
+        if (data[5] > 1) {
+          bpf_trace_printk("Event packet number %d", data[5]);
         }
 
         if(ts > 0) {

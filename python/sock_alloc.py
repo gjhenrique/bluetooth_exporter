@@ -2,7 +2,7 @@ import time
 from bcc import BPF
 
 def main():
-    bpf = BPF(src_file="../src/bufsize.c")
+    bpf = BPF(src_file="../src/sock_alloc.c")
     bpf.attach_kprobe(event="l2cap_sock_sendmsg", fn_name="l2cap_sendmsg")
     bpf.attach_kprobe(event="sco_sock_sendmsg", fn_name="sco_sendmsg")
 
