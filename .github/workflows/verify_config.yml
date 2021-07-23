@@ -1,0 +1,24 @@
+name: Check config.yaml file
+
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.9
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruamel.yaml
+      - name: Check if files are different
+        run: |
+          cat config.yaml > config.yaml.old
+          # Writes config.yaml from exporter metrics
+          python aggregate.py
+          diff config.yaml.old config.yaml
