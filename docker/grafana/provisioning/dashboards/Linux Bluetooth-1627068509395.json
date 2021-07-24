@@ -220,7 +220,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(ebpf_exporter_bufsize_bucket{proto=\"L2CAP\"}[$__interval])",
+          "expr": "rate(ebpf_exporter_sock_alloc_bucket{proto=\"L2CAP\"}[$__interval])",
           "format": "heatmap",
           "interval": "",
           "legendFormat": "{{le}}",
@@ -284,7 +284,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(ebpf_exporter_bufsize_bucket{proto=\"SCO\"}[$__interval])",
+          "expr": "rate(ebpf_exporter_sock_alloc_bucket{proto=\"SCO\"}[$__interval])",
           "format": "heatmap",
           "interval": "",
           "legendFormat": "{{le}}",
@@ -390,7 +390,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "rate(ebpf_exporter_hdev_count{type=\"ACL\"}[$__interval])",
+          "expr": "rate(ebpf_exporter_hci_dev_cnt{type=\"ACL\"}[$__interval])",
           "interval": "",
           "legendFormat": "{{type}} - {{count}}",
           "refId": "A"
@@ -596,7 +596,7 @@
       "yBucketSize": null
     }
   ],
-  "refresh": false,
+  "refresh": "5s",
   "schemaVersion": 30,
   "style": "dark",
   "tags": [],
@@ -604,12 +604,12 @@
     "list": []
   },
   "time": {
-    "from": "now-6h",
+    "from": "now-5m",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "Linux Bluetooth",
   "uid": "gqUs4tm7z",
-  "version": 32
+  "version": 1
 }
