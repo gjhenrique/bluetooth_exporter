@@ -2,66 +2,6 @@
 
 Uses [ebpf_exporter](https://github.com/cloudflare/ebpf_exporter) to export Prometheus metrics about Bluetooth data in Linux, and it brings a Grafana and Prometheus on docker-compose for easy visualization of this data.
 
-## Running
-
-```shell
-# Requires ebpf_exporter to be installed in the host
-go get -u -v github.com/cloudflare/ebpf_exporter/
-sudo ebpf_exporter --config.file=config.yaml
-# In another terminal session to start Prometheus and Grafana
-docker-compose -f docker/docker-compose.yaml up
-# Visit http://localhost:3000 with user admin and password foobar and check the panel
-```
-
-## Bluetooth on kernel
-The responsibility of the kernel is to be the bridge between user space and the Bluetooth controller. The userspace interface is a socket.
-
-``` c
-// Always the same domain is used. AF_BLUETOOTH and PF_BLUETOOTH are equivalent
-int fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
-int fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_SCO);
-int fd = socket(PF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI);
-```
-
-The protocol passed as the third argument is different based on the use cases of the user.
-`BTPROTO_L2CAP` on top of `ACL` is used for high-quality audio, `BTPROTO_SCO.`
-for bi-directional and simultaneous voice and (poorer) audio,
-and `BTPROTO_HCI` to talk directly to the controller.
-
-Based on the type of protocol, the kernel uses different files to handle incoming/outgoing data from userspace.
-It register socket types and the callbacks defined on [struct proto_ops](https://github.com/torvalds/linux/search?q=path%3Anet%2Fbluetooth+proto_ops) are invoked whenever userspace wants to connect, bind or write/read data.
-
-## Life of a Bluetooth packet inside the kernel
-To understand some of these metrics, let's trace the life of a Bluetooth L2CAP audio packet.
-
-1. user space writes binary data that should be delivered as L2CAP protocol to the connected device.
-``` c
-struct buffer *buf = alloc_data();
-write(fd, buf->data, buf->size);
-```
-
-2. Inside `bluetooth` module, the callback declared in the `sendmsg` field of `struct proto_ops` is called. In this specific case, the function is `l2cap_sock_sendmsg`, which receives a `struct msghdr` containing data from userspace.
-
-3. The `struct msghdr` is converted into a `struct sk_buff` that's now used across this layer.
-
-4. After that, it adds this `sk_buff` into a linked list `data_q` inside `l2cap_chan`.
-This list is initialized in the socket creation.
-After that, a `struct work_struct` is enqueued in a `workqueue` associated with the controller.
-
-5. Later, in a worker thread, the function `hci_tx_work` is invoked and tries to dequeue all the `sk_buffs` from all the sockets. This `skb_buff` from the list is eventually dequeued and sent to the `btusb` lower layer.
-
-6. The `btusb` module receives the `sk_buff` and converts it to a [USB Request Block (urb)](https://www.kernel.org/doc/html/latest/driver-api/usb/URB.html) setting all its configuration and callbacks. `usb_submit_urb` is then called to allow the lower layer to perform the communication.
-
-7. The `xhci_hcd` module interfaces with USB devices, and it's responsible for sending the `struct urb` the endpoint address registered by the controller.
-
-8. The controller receives this and sends this data to the device.
-The code is closed source, and generally, vendors export only the blobs inside the [linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git) project.
-
-9. After the packet is transmitted, the controller sends back an event packet to update the availability, signalling that this slot can now be used by a new packet.
-
-The first layer lives in the `bluetooth` module. Then it goes to modules `btusb` and finally to `xhci_hcd`.
-Receiving a packet from the controller goes the reverse direction from `xhci_hcd`, `btusb` and `bluetooth` until the data is handled by the socket reading it.
-
 ## Metrics
 This project attaches some `kprobes` and `kretprobes` events inside the kernel to export Prometheus data of some relevant Bluetooth components.
 
@@ -117,7 +57,68 @@ When taking the headset to the kitchen for around 1 minute and a half, the time 
 **Notice**: There is an issue that happened a few times that this event packet is not sent on my controller (AX200).
 This means the `BPF_QUEUE` is outdated and presents a wrong value.
 
-## Development
+
+## Bluetooth on kernel
+The responsibility of the kernel is to be the bridge between user space and the Bluetooth controller. The userspace interface is a socket.
+
+``` c
+// Always the same domain is used. AF_BLUETOOTH and PF_BLUETOOTH are equivalent
+int fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP);
+int fd = socket(PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_SCO);
+int fd = socket(PF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI);
+```
+
+The protocol passed as the third argument is different based on the use cases of the user.
+`BTPROTO_L2CAP` on top of `ACL` is used for high-quality audio, `BTPROTO_SCO.`
+for bi-directional and simultaneous voice and (poorer) audio,
+and `BTPROTO_HCI` to talk directly to the controller.
+
+Based on the type of protocol, the kernel uses different files to handle incoming/outgoing data from userspace.
+It register socket types and the callbacks defined on [struct proto_ops](https://github.com/torvalds/linux/search?q=path%3Anet%2Fbluetooth+proto_ops) are invoked whenever userspace wants to connect, bind or write/read data.
+
+## Life of a Bluetooth packet inside the kernel
+To understand some of these metrics, let's trace the life of a Bluetooth L2CAP audio packet.
+
+1. user space writes binary data that should be delivered as L2CAP protocol to the connected device.
+``` c
+struct buffer *buf = alloc_data();
+write(fd, buf->data, buf->size);
+```
+
+2. Inside `bluetooth` module, the callback declared in the `sendmsg` field of `struct proto_ops` is called. In this specific case, the function is `l2cap_sock_sendmsg`, which receives a `struct msghdr` containing data from userspace.
+
+3. The `struct msghdr` is converted into a `struct sk_buff` that's now used across this layer.
+
+4. After that, it adds this `sk_buff` into a linked list `data_q` inside `l2cap_chan`.
+This list is initialized in the socket creation.
+After that, a `struct work_struct` is enqueued in a `workqueue` associated with the controller.
+
+5. Later, in a worker thread, the function `hci_tx_work` is invoked and tries to dequeue all the `sk_buffs` from all the sockets. This `skb_buff` from the list is eventually dequeued and sent to the `btusb` lower layer.
+
+6. The `btusb` module receives the `sk_buff` and converts it to a [USB Request Block (urb)](https://www.kernel.org/doc/html/latest/driver-api/usb/URB.html) setting all its configuration and callbacks. `usb_submit_urb` is then called to allow the lower layer to perform the communication.
+
+7. The `xhci_hcd` module interfaces with USB devices, and it's responsible for sending the `struct urb` the endpoint address registered by the controller.
+
+8. The controller receives this and sends this data to the device.
+The code is closed source, and generally, vendors export only the blobs inside the [linux-firmware](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git) project.
+
+9. After the packet is transmitted, the controller sends back an event packet to update the availability, signalling that this slot can now be used by a new packet.
+
+The first layer lives in the `bluetooth` module. Then it goes to modules `btusb` and finally to `xhci_hcd`.
+Receiving a packet from the controller goes the reverse direction from `xhci_hcd`, `btusb` and `bluetooth` until the data is handled by the socket reading it.
+
+## Running
+
+```shell
+# Requires ebpf_exporter to be installed in the host
+go get -u -v github.com/cloudflare/ebpf_exporter/
+sudo ebpf_exporter --config.file=config.yaml
+# In another terminal session to start Prometheus and Grafana
+docker-compose -f docker/docker-compose.yaml up
+# Visit http://localhost:3000 with user admin and password foobar and check the panel
+```
+
+## Architecture
 The eBPF programs are c files living in `src`.
 There are python scripts inside the `python` directory that print the eBPF data structures for a quicker development cycle.
 
